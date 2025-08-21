@@ -2,4 +2,4 @@ streamlit
 librosa
 scikit-learn
 joblib
-soundfile
+matplotlib
