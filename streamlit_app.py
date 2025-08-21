@@ -1,55 +1,84 @@
 import streamlit as st
+X.append(extract_features(f))
+y.append("Bear")
+for f in dog_files:
+X.append(extract_features(f))
+y.append("Dog")
+for f in cat_files:
+X.append(extract_features(f))
+y.append("Cat")
+for f in elephant_files:
+X.append(extract_features(f))
+y.append("Elephant")
+
+
+if len(X) > 0:
+X = np.array(X)
+y = np.array(y)
+
+
+model = make_pipeline(StandardScaler(), SVC(probability=True))
 model.fit(X, y)
 
 
 st.session_state["model"] = model
-st.session_state["labels"] = sorted(list(set(y)))
+st.session_state["labels"] = list(set(y))
 st.session_state["X_train_size"] = len(X)
 
 
-y_pred = model.predict(X)
-rep = classification_report(y, y_pred, digits=3)
-cm = confusion_matrix(y, y_pred, labels=st.session_state["labels"])
+preds = model.predict(X)
+rep = classification_report(y, preds)
 st.session_state["report"] = rep
 
 
-st.success("✅ Đã train xong mô hình!")
-st.code(rep, language="text")
-st.write("Confusion matrix:")
-st.write(cm)
+st.success("Đã train mô hình xong!")
+st.text(rep)
 
 
+cm = confusion_matrix(y, preds, labels=st.session_state["labels"])
+fig, ax = plt.subplots()
+im = ax.imshow(cm, cmap="Blues")
+ax.set_xticks(np.arange(len(st.session_state["labels"])))
+ax.set_yticks(np.arange(len(st.session_state["labels"])))
+ax.set_xticklabels(st.session_state["labels"])
+ax.set_yticklabels(st.session_state["labels"])
+plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+
+
+for i in range(len(st.session_state["labels"])):
+for j in range(len(st.session_state["labels"])):
+ax.text(j, i, cm[i, j], ha="center", va="center", color="red")
+
+
+ax.set_title("Confusion Matrix")
+st.pyplot(fig)
+
+
+# Tải mô hình
 buf = io.BytesIO()
 joblib.dump(model, buf)
 buf.seek(0)
 st.download_button(
-label="💾 Tải về mô hình (.joblib)",
+label="💾 Tải về mô hình",
 data=buf,
 file_name="animal_sound_classifier.joblib",
 mime="application/octet-stream",
 )
+else:
+st.warning("Hãy upload ít nhất 1 file để train.")
 
 
-# ---------- Classification ----------
+# Classification
 if classify_clicked:
 if "model" not in st.session_state:
-st.error("Chưa có mô hình. Hãy train trước.")
-elif classify_file is None:
-st.error("Hãy upload 1 file âm thanh để phân loại.")
+st.error("Chưa có mô hình, hãy train trước.")
 else:
-with st.spinner("Đang phân tích và dự đoán..."):
-try:
-classify_file.seek(0)
-ysig = _load_audio(classify_file)
-feats = extract_features_from_signal(ysig).reshape(1, -1)
-proba = st.session_state["model"].predict_proba(feats)[0]
-classes = st.session_state["model"].classes_
-order = np.argsort(-proba)
-st.subheader("Kết quả dự đoán")
-for idx in order:
-st.write(f"**{classes[idx]}**: {proba[idx]*100:.2f}%")
-except Exception as e:
-st.error(f"Không thể phân loại file: {e}")
+feats = extract_features(classify_file)
+pred = st.session_state["model"].predict([feats])[0]
+proba = st.session_state["model"].predict_proba([feats])[0]
+st.success(f"Âm thanh được phân loại là: **{pred}**")
+for label, p in zip(st.session_state["model"].classes_, proba):
+st.write(f"{label}: {p:.2f}")
 
 
 # ---------- Export model info ----------
@@ -77,22 +106,4 @@ label="💾 Tải về mô hình (.joblib)",
 data=buf,
 file_name="animal_sound_classifier.joblib",
 mime="application/octet-stream",
-)
-
-
-# ---------- Sidebar ----------
-st.sidebar.header("Hướng dẫn nhanh")
-st.sidebar.markdown(
-"""
-- Chuẩn bị mỗi lớp >= 5 file âm thanh, càng đa dạng càng tốt.
-- File nên dài >= 1–2 giây, hạn chế tạp âm.
-- Với dữ liệu lớn hơn, hãy tách train/test để đánh giá chuẩn.
-
-
-**Cài đặt:**
-```bash
-pip install streamlit librosa scikit-learn joblib
-streamlit run streamlit_app.py
-```
-"""
 )
